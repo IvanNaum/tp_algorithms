@@ -76,7 +76,7 @@ struct Heap {
   bool is_empty() const { return _size == 0; }
 
   void print() {
-    for (int i = 0; i < _size; ++i) {
+    for (size_t i = 0; i < _size; ++i) {
       std::cout << _data[i] << ' ';
     }
     std::cout << std::endl;
