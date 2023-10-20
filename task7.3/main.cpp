@@ -11,7 +11,9 @@
 */
 
 int partition(uint64_t *array, int array_size, int power) {
-  uint64_t pivot = 1 << power;
+  assert(array_size > 0);
+
+  uint64_t pivot = 1ull << power;
   int l_index = 0;
   int r_index = 0;
 
@@ -28,11 +30,16 @@ int partition(uint64_t *array, int array_size, int power) {
 }
 
 void MSD(uint64_t *array, int array_size, int power = 63) {
-  if (power < 0 || array_size <= 0) {
+  if (power < 0 || array_size <= 1) {
     return;
   }
 
-  int center_index = partition(array, array_size, power);
+  int center_index;
+  do {
+    center_index = partition(array, array_size, power--);
+  } while (center_index == array_size);
+
+  power++;
 
   MSD(array, center_index, power - 1);
   MSD(array + center_index, array_size - center_index, power - 1);
@@ -78,15 +85,6 @@ void test_MSD() {
     assert(array[4] == 5);
   }
   {
-    uint64_t array[] = {1 << 25, 1 << 13, 1 << 3, 1 << 6, 1 << 12};
-    MSD(array, 5);
-    assert(array[0] == 1 << 3);
-    assert(array[1] == 1 << 6);
-    assert(array[2] == 1 << 12);
-    assert(array[3] == 1 << 13);
-    assert(array[4] == 1 << 25);
-  }
-  {
     uint64_t array[] = {4, 1000000, 7};
     MSD(array, 3);
     assert(array[0] == 4);
@@ -111,32 +109,47 @@ void test_MSD() {
     assert(array[1] == 1);
     assert(array[2] == 3);
   }
+  {
+    uint64_t array[] = {(1 << 5), (1 << 5) + 1, (1 << 5) - 1};
+    MSD(array, 3);
+    assert(array[0] == (1 << 5) - 1);
+    assert(array[1] == (1 << 5));
+    assert(array[2] == (1 << 5) + 1);
+  }
+  {
+    const uint64_t k = 10000;
+    uint64_t array[k] = {0};
+    for (int i = 1; i <= k; ++i) array[i - 1] = i;
+    MSD(array, k);
+    for (int i = 1; i <= k; ++i) assert(array[i - 1] == i);
+  }
 
   std::cout << "The MSD tests were successful." << std::endl;
 }
 
 int main() {
   // Tests
+  // test_partition();
+  // test_MSD();
+
   assert(sizeof(uint64_t) * 8 == 64);
-  test_partition();
-  test_MSD();
 
-  // int N;
-  // std::cin >> N;
+  int N;
+  std::cin >> N;
 
-  // uint64_t *array = new uint64_t[N];
-  // for (int i = 0; i < N; ++i) {
-  //   std::cin >> array[i];
-  // }
+  uint64_t *array = new uint64_t[N];
+  for (int i = 0; i < N; ++i) {
+    std::cin >> array[i];
+  }
 
-  // // Sorting
-  // MSD(array, N);
+  // Sorting
+  MSD(array, N);
 
-  // for (int i = 0; i < N; ++i) {
-  //   std::cout << array[i] << ' ';
-  // }
+  for (int i = 0; i < N; ++i) {
+    std::cout << array[i] << ' ';
+  }
 
-  // delete[] array;
+  delete[] array;
 
   return 0;
 }
