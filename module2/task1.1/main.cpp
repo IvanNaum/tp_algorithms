@@ -32,19 +32,24 @@ struct HashTable {
 
     bool insert(const std::string &key) {
         size_t index = 0;
-        size_t hashed_index = get_probe(key, index);
-
-        while (!cell_can_accept(hashed_index)) {
-            ++index;
-            if (_table[hashed_index] == key || index == _table.size()) {
+        size_t hashed_index;
+        while (index < _table.size()) {
+            hashed_index = get_probe(key, index);
+            if (cell_can_accept(hashed_index)) {
+                break;
+            }
+            if (_table[hashed_index].value() == key) {
                 return false;
             }
-            hashed_index = get_probe(key, index);
+            ++index;
+        }
+        if (index >= _table.size()) {
+            return false;
         }
 
         _table[hashed_index] = key;
         ++_size;
-        if (size() > _table.size() / 4 * 3) {
+        if (_size > (_table.size() / 4 * 3)) {
             _rehash_table();
         }
         return true;
@@ -53,19 +58,20 @@ struct HashTable {
     bool exclude(const std::string &key) {
         size_t index = 0;
         size_t hashed_index = get_probe(key, index);
-//        do {
-//            assert(_table.size() != index);
-//            hashed_index = get_probe(key, index);
-//            ++index;
-//        } while (key != _table[hashed_index]);
-        while (_table[hashed_index] != key) {
-            ++index;
-            if (index == _table.size() || cell_is_empty(hashed_index)) {
+
+        while (index < _table.size()) {
+            hashed_index = get_probe(key, index);
+            if (cell_is_empty(hashed_index)) {
                 return false;
             }
-            hashed_index = get_probe(key, index);
+            if (_table[hashed_index].value() == key) {
+                break;
+            }
+            ++index;
         }
-
+        if (index >= _table.size()) {
+            return false;
+        }
         _table[hashed_index]->clear();
         --_size;
         return true;
@@ -73,14 +79,17 @@ struct HashTable {
 
     bool find(const std::string &key) {
         size_t index = 0;
-        size_t hashed_index = get_probe(key, index);
+        size_t hashed_index;
 
-        while (!cell_is_empty(hashed_index) && index != _table.size()) {
-            if (_table[hashed_index] == key) {
+        while (index < _table.size()) {
+            hashed_index = get_probe(key, index);
+            if (cell_is_empty(hashed_index)) {
+                return false;
+            }
+            if (_table[hashed_index].value() == key) {
                 return true;
             }
             ++index;
-            hashed_index = get_probe(key, index);
         }
         return false;
     }
@@ -89,14 +98,25 @@ struct HashTable {
 
 private:
     void _rehash_table() {
+//        std::vector<std::optional<std::string>> old_table = _table;
+//        _table = std::vector<std::optional<std::string>>(old_table.size() * 2, std::nullopt);
+//        for (auto &k: old_table) {
+//            if (k == std::nullopt || k.value().empty()) {
+//                continue;
+//            }
+//            assert(insert(k.value()));
+//        }
+
         HashTable<Hasher> new_hash_table = HashTable(_table.size() * 2);
-        for (auto k: _table) {
-            if (k && !k->empty()) {
-                new_hash_table.insert(k.value());
+        for (auto &i: _table) {
+            if (i == std::nullopt || i.value().empty()) {
+                continue;
             }
+            assert(new_hash_table.insert(i.value()));
         }
-        std::swap(this->_table, new_hash_table._table);
-        std::swap(this->_size, new_hash_table._size);
+//        std::swap(this->_table, new_hash_table._table);
+        _table = std::move(new_hash_table._table);
+        assert(this->_size == new_hash_table._size);
     }
 
     bool cell_can_accept(size_t index) {
@@ -121,7 +141,7 @@ private:
 };
 
 struct StringHasher {
-    explicit StringHasher(size_t prime = 97) {};
+    explicit StringHasher(size_t prime = 97) : _prime(prime) {};
 
     ~StringHasher() = default;
 
@@ -129,19 +149,17 @@ struct StringHasher {
 
     StringHasher &operator=(const StringHasher &) = delete;
 
-
     size_t operator()(const std::string &str) const {
         assert(!str.empty());
-
-        auto hash = (size_t) str.front();
-        for (size_t i = 1; i < str.size(); ++i) {
-            hash = prime * hash + str[i];
+        size_t hash = 0;
+        for (char k: str) {
+            hash = _prime * hash + (size_t) k;
         }
         return hash;
     }
 
 private:
-    size_t prime;
+    size_t _prime{};
 };
 
 void test_hashtable() {
@@ -180,11 +198,14 @@ void test_hashtable() {
     }
     {
         HashTable<StringHasher> hash_table;
-        int test_size = 10;
+        int test_size = 10000;
         std::string str = "string";
         for (int i = 0; i < test_size; ++i) {
             assert(hash_table.insert(str + std::to_string(i)));
         }
+
+        assert(hash_table.size() == test_size);
+
         for (int i = 0; i < test_size; ++i) {
             assert(hash_table.find(str + std::to_string(i)));
         }
@@ -195,11 +216,12 @@ void test_hashtable() {
             assert(!hash_table.find(str + std::to_string(i)));
         }
     }
+    std::cout << "Success tests!" << std::endl;
 }
 
 int main() {
+//    Tests
 //    test_hashtable();
-//    std::cout << "Success test!" << std::endl;
 
     HashTable<StringHasher> hash_table;
 
