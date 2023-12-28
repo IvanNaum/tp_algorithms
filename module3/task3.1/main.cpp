@@ -2,9 +2,14 @@
 #include <vector>
 #include <cassert>
 #include <queue>
-#include <set>
-#include <limits.h>
+#include <unordered_map>
+#include <climits>
 
+struct PairHasher {
+    size_t operator()(const std::pair<int, int> &pr) const {
+        return std::hash<int>{}(pr.first + pr.second);
+    }
+};
 
 struct IGraph {
     virtual ~IGraph() {}
@@ -20,13 +25,12 @@ struct IGraph {
     virtual std::vector<int> GetPrevVertices(int vertex) const = 0;
 };
 
+struct MapGraph : public IGraph {
+    MapGraph(size_t size);
 
-struct MatrixGraph : public IGraph {
-    explicit MatrixGraph(size_t size);
+    explicit MapGraph(const IGraph &);
 
-    explicit MatrixGraph(const IGraph &);
-
-    ~MatrixGraph() override;
+    ~MapGraph() override;
 
     void AddEdge(int from, int to, int weight) override;
 
@@ -39,12 +43,21 @@ struct MatrixGraph : public IGraph {
     int GetWeight(int from, int to) const override;
 
 private:
-    std::vector<std::vector<int>> adjacency_matrix;
+    int size;
+    std::unordered_map<std::pair<int, int>, int, PairHasher> edges_map;
 };
 
-MatrixGraph::MatrixGraph(size_t size) : adjacency_matrix(size, std::vector<int>(size, 0)) {};
+std::pair<int, int> get_pair(int from, int to) {
+    if (from < to) {
+        return {from, to};
+    } else {
+        return {to, from};
+    };
+}
 
-MatrixGraph::MatrixGraph(const IGraph &graph) : MatrixGraph(graph.VerticesCount()) {
+MapGraph::MapGraph(size_t size) : size(size) {};
+
+MapGraph::MapGraph(const IGraph &graph) : MapGraph(graph.VerticesCount()) {
     for (int from = 0; from < graph.VerticesCount(); ++from) {
         for (int to: graph.GetNextVertices(from)) {
             AddEdge(from, to, graph.GetWeight(from, to));
@@ -52,54 +65,56 @@ MatrixGraph::MatrixGraph(const IGraph &graph) : MatrixGraph(graph.VerticesCount(
     }
 }
 
-MatrixGraph::~MatrixGraph() = default;
+MapGraph::~MapGraph() = default;
 
-int MatrixGraph::GetWeight(int from, int to) const {
-    return adjacency_matrix.at(from).at(to);
-}
+void MapGraph::AddEdge(int from, int to, int weight) {
+    assert(0 <= from && from < size);
+    assert(0 <= to && to < size);
 
-void MatrixGraph::AddEdge(int from, int to, int weight) {
-    assert(0 <= from && from < adjacency_matrix.size());
-    assert(0 <= to && to < adjacency_matrix.size());
+    std::pair<int, int> pr = get_pair(from, to);
 
-    int exists_weight = GetWeight(from, to);
-    if (exists_weight == 0 || exists_weight > weight) {
-        adjacency_matrix.at(from).at(to) = weight;
-        adjacency_matrix.at(to).at(from) = weight;
+    if (GetWeight(from, to) > weight) {
+        edges_map[pr] = weight;
     }
 }
 
-int MatrixGraph::VerticesCount() const {
-    return adjacency_matrix.size();
+int MapGraph::VerticesCount() const {
+    return size;
 }
 
-std::vector<int> MatrixGraph::GetNextVertices(int vertex) const {
-    assert(0 <= vertex && vertex < adjacency_matrix.size());
+std::vector<int> MapGraph::GetNextVertices(int vertex) const {
+    assert(0 <= vertex && vertex < size);
+
+    return GetPrevVertices(vertex);
+}
+
+std::vector<int> MapGraph::GetPrevVertices(int vertex) const {
+    assert(0 <= vertex && vertex < size);
 
     std::vector<int> result;
-
-    for (int i = 0; i < adjacency_matrix.at(vertex).size(); ++i) {
-        if (adjacency_matrix.at(vertex).at(i) != 0) {
-            result.push_back(i);
+    for (const auto &[k, w]: edges_map) {
+        if (k.second == vertex) {
+            result.push_back(k.first);
+        }
+        if (k.first == vertex) {
+            result.push_back(k.second);
         }
     }
-
     return result;
 }
 
-std::vector<int> MatrixGraph::GetPrevVertices(int vertex) const {
-    assert(0 <= vertex && vertex < adjacency_matrix.size());
+int MapGraph::GetWeight(int from, int to) const {
+    assert(0 <= from && from < size);
+    assert(0 <= to && to < size);
 
-    std::vector<int> result;
+    std::pair<int, int> pr = get_pair(from, to);
 
-    for (size_t i = 0; i < adjacency_matrix.size(); ++i) {
-        if (adjacency_matrix.at(i).at(vertex) != 0) {
-            result.push_back(i);
-        }
+    if (edges_map.find(pr) == edges_map.end()) {
+        return INT_MAX;
     }
-
-    return result;
+    return edges_map.at(pr);
 }
+
 
 int get_shortest_way(const IGraph &graph, int from, int to) {
     std::vector<bool> visited(graph.VerticesCount(), false);
@@ -135,7 +150,7 @@ int main() {
     int N, M;
     std::cin >> N >> M;
 
-    MatrixGraph graph(N);
+    MapGraph graph(N);
 
     int from, to, weight;
     for (int i = 0; i < M; ++i) {
